@@ -487,6 +487,99 @@ export function closeHelpModal() {
   document.getElementById('helpModal').style.display = 'none';
 }
 
+// ── Load Save Modal ──────────────────────────────────────────────────────────
+
+export async function showLoadModal(onLoad) {
+  // Try native file picker first (Save As / Open dialog — user picks location)
+  if (window.showOpenFilePicker) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'Elder Realm Save', accept: { 'application/json': ['.json'] } }],
+        multiple: false,
+      });
+      const file = await handle.getFile();
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data.gameState || !data.version) {
+        alert('Invalid save file. This doesn\'t look like an Elder Realm save.');
+        return;
+      }
+      onLoad(data);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return; // user cancelled
+      console.warn('Open picker failed, falling back to modal:', e);
+    }
+  }
+
+  // Fallback: modal with file input
+  const modal = document.getElementById('loadModal');
+  const fileInput = document.getElementById('loadFileInput');
+  const info = document.getElementById('loadFileInfo');
+  const confirmBtn = document.getElementById('confirmLoad');
+  const cancelBtn = document.getElementById('cancelLoad');
+  const closeBtn = document.getElementById('closeLoadModal');
+
+  let parsedData = null;
+
+  // Reset state
+  fileInput.value = '';
+  info.innerHTML = '';
+  info.classList.remove('active');
+  confirmBtn.disabled = true;
+
+  function close() { modal.style.display = 'none'; }
+
+  fileInput.onchange = () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!data.gameState || !data.version) {
+          info.innerHTML = '<strong>Invalid save file.</strong> This doesn\'t look like an Elder Realm save.';
+          info.classList.add('active');
+          confirmBtn.disabled = true;
+          parsedData = null;
+          return;
+        }
+        parsedData = data;
+        const date = data.savedAt ? new Date(data.savedAt).toLocaleString() : 'Unknown';
+        info.innerHTML = `
+          <strong>${data.worldName || 'Unknown World'}</strong><br>
+          Turn ${data.turnNumber || '?'} &middot; Saved ${date}
+        `;
+        info.classList.add('active');
+        confirmBtn.disabled = false;
+      } catch {
+        info.innerHTML = '<strong>Error:</strong> Could not read file. Make sure it\'s a valid .json save.';
+        info.classList.add('active');
+        confirmBtn.disabled = true;
+        parsedData = null;
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  confirmBtn.onclick = () => {
+    if (!parsedData) return;
+    close();
+    onLoad(parsedData);
+  };
+
+  cancelBtn.onclick = close;
+  closeBtn.onclick = close;
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+
+  modal.style.display = 'flex';
+}
+
+export function closeLoadModal() {
+  document.getElementById('loadModal').style.display = 'none';
+}
+
 function renderManualMarkdown(md) {
   // Escape HTML first
   let html = md

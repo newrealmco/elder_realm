@@ -2,8 +2,8 @@
 
 import { createCharacter, generateCompanion, applyHpChange, gainXP } from './characters.js';
 import { callDM, parseGameState, parseQuickActions, stripQuickActions, buildOpeningMessage, getApiKey, setApiKey } from './api.js';
-import { initStory, appendTurn, appendQuestEntry, appendPlace, appendLore, downloadStory } from './story.js';
-import { initStarfield, initRunicStrip, initCharGenModal, renderPartyCards, addNarrativeMessage, removeThinkingMessage, initTabs, switchTab, openMapModal, showApiKeyModal, isApiKeyModalRequired, openHelpModal, closeHelpModal, setInputEnabled, clearInput, getInputValue, updateLocationDisplay, updateWorldName, renderMiniMap, showLevelUp, showXPGained } from './ui.js';
+import { initStory, appendTurn, appendQuestEntry, appendPlace, appendLore, downloadStory, getStory, setStory } from './story.js';
+import { initStarfield, initRunicStrip, initCharGenModal, renderPartyCards, addNarrativeMessage, removeThinkingMessage, initTabs, switchTab, openMapModal, showApiKeyModal, isApiKeyModalRequired, openHelpModal, closeHelpModal, showLoadModal, closeLoadModal, setInputEnabled, clearInput, getInputValue, updateLocationDisplay, updateWorldName, renderMiniMap, showLevelUp, showXPGained } from './ui.js';
 import { initDicePanel, rollAndAnimate, getPendingRolls } from './dice.js';
 import { generateWorldMap, generateLocationMap } from './maps.js';
 import { getCombatState, processCombatGameState, renderCombatOverlay, deactivateCombat } from './combat.js';
@@ -81,6 +81,66 @@ function loadSavedState() {
     console.warn('Failed to load saved state:', e);
     return false;
   }
+}
+
+// ── Save File Export / Import ──────────────────────────────────────────────
+
+async function exportSave() {
+  saveAll(); // ensure localStorage is up to date
+  const data = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    worldName: gameState.worldName,
+    turnNumber: gameState.turnNumber,
+    gameState: JSON.parse(localStorage.getItem('chronicles_game_state') || '{}'),
+    conversation: JSON.parse(localStorage.getItem('chronicles_conversation') || '[]'),
+    inventory: JSON.parse(localStorage.getItem('chronicles_inventory') || '[]'),
+    questEntries: JSON.parse(localStorage.getItem('chronicles_quest_entries') || '[]'),
+    loreEntries: JSON.parse(localStorage.getItem('chronicles_lore_entries') || '[]'),
+    storyMd: getStory(),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const worldSlug = (gameState.worldName || 'game').toLowerCase().replace(/\s+/g, '-');
+  const fileName = `save-${worldSlug}-turn${gameState.turnNumber}.json`;
+
+  // Use File System Access API (Save As dialog) if available
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [{ description: 'Elder Realm Save', accept: { 'application/json': ['.json'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      addNarrativeMessage('system', '<em>Game saved to file.</em>');
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return; // user cancelled
+      console.warn('Save picker failed, falling back to download:', e);
+    }
+  }
+
+  // Fallback: auto-download
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+  addNarrativeMessage('system', '<em>Game saved to file.</em>');
+}
+
+function importSave(data) {
+  // Write all data into localStorage
+  localStorage.setItem('chronicles_game_state', JSON.stringify(data.gameState));
+  localStorage.setItem('chronicles_conversation', JSON.stringify(data.conversation || []));
+  localStorage.setItem('chronicles_inventory', JSON.stringify(data.inventory || []));
+  localStorage.setItem('chronicles_quest_entries', JSON.stringify(data.questEntries || []));
+  localStorage.setItem('chronicles_lore_entries', JSON.stringify(data.loreEntries || []));
+  if (data.storyMd) setStory(data.storyMd);
+  // Now resume from the imported state
+  resumeGame();
 }
 
 // ── Turn Loop ──────────────────────────────────────────────────────────────
@@ -372,6 +432,9 @@ async function boot() {
   }
 
   document.getElementById('resumeGame')?.addEventListener('click', resumeGame);
+  document.getElementById('loadSaveBtn')?.addEventListener('click', () => {
+    showLoadModal(importSave);
+  });
 
   document.getElementById('beginBtn')?.addEventListener('click', startNewGame);
 
@@ -488,6 +551,7 @@ async function launchGame() {
   document.getElementById('expandMapBtn')?.addEventListener('click', () => {
     openMapModal(gameState.worldMapSvg, gameState.locationMapSvg, 'location');
   });
+  document.getElementById('exportSaveBtn')?.addEventListener('click', exportSave);
   document.getElementById('saveStoryBtn')?.addEventListener('click', () => {
     downloadStory(gameState.worldName);
   });
@@ -583,6 +647,7 @@ function resumeGameLayout() {
   document.getElementById('expandMapBtn')?.addEventListener('click', () => {
     openMapModal(gameState.worldMapSvg, gameState.locationMapSvg, 'location');
   });
+  document.getElementById('exportSaveBtn')?.addEventListener('click', exportSave);
   document.getElementById('saveStoryBtn')?.addEventListener('click', () => {
     downloadStory(gameState.worldName);
   });
@@ -661,6 +726,7 @@ function returnToTitle() {
 function closeAllModals() {
   document.getElementById('mapModal').style.display  = 'none';
   document.getElementById('helpModal').style.display = 'none';
+  document.getElementById('loadModal').style.display = 'none';
   // Don't dismiss the API key modal if a key is required
   if (!isApiKeyModalRequired()) {
     document.getElementById('apiKeyModal').style.display = 'none';

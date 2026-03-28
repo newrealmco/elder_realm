@@ -121,11 +121,17 @@ You can change your AI provider or model at any time — even mid-adventure. You
 
 The top bar shows your spending: `$0.12 / $5.00` (spent / budget). This tracks token usage based on your selected model's pricing. Set a budget in Settings to monitor costs.
 
-### Saving Your Story
+### Privacy & Security
+
+All API keys and game data are stored in your browser's local storage. **Nothing is ever uploaded to any server** — your keys are sent only to your chosen AI provider's API when generating responses. If you self-host or embed the game, the hosting server never sees your keys.
+
+### Saving & Loading
 
 - **Auto-save** — The game saves to your browser's local storage after every turn. Close and reopen the browser — your adventure persists.
-- **Save Story** — Click the save button in the top bar to download your full narrative as a `story.md` markdown file.
-- **Resume** — When you return, click **Resume Saved Journey** on the title screen.
+- **Save Game** — Click **Save Game** in the top bar to download a full save file (`.json`). This contains your entire game state — party, inventory, quests, conversation, story, and map data. You can keep multiple save files on your computer.
+- **Export Story** — Click **Export Story** to download the narrative log as a readable `.md` markdown file. This is a keepsake for reading later — it cannot be loaded back into the game.
+- **Load Save File** — On the title screen, click **Load Save File** and select a `.json` save. You'll see a preview (world name, turn number, save date) before confirming.
+- **Resume** — Click **Resume Saved Journey** on the title screen to continue your most recent auto-saved game.
 
 ---
 

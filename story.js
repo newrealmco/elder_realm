@@ -39,6 +39,10 @@ export function getStory() {
   return localStorage.getItem(STORY_KEY) || '';
 }
 
+export function setStory(content) {
+  localStorage.setItem(STORY_KEY, content);
+}
+
 export function getStoryForPrompt() {
   const full = getStory();
   if (full.length <= MAX_INJECT_CHARS) return full;

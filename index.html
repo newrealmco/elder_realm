@@ -33,7 +33,7 @@
         <label for="apiKeyInput" id="apiKeyLabel">API Key</label>
         <input type="password" id="apiKeyInput" placeholder="sk-ant-..." autocomplete="off">
       </div>
-      <p class="modal-hint">Your key is stored locally and never sent anywhere except your provider's servers.<br>
+      <p class="modal-hint">Your key is stored in your browser only — never uploaded to any server. It is sent only to your AI provider's API.<br>
         Get a key at <em id="apiKeyHintUrl">console.anthropic.com</em></p>
       <div class="form-group">
         <label for="budgetInput">Session Budget ($)</label>
@@ -64,6 +64,7 @@
       </p>
       <button id="beginBtn" class="btn-begin">Begin Your Legend</button>
       <button id="resumeGame" class="btn-secondary title-resume-btn" style="display:none;">Resume Saved Journey</button>
+      <button id="loadSaveBtn" class="btn-secondary title-resume-btn">Load Save File</button>
       <button id="titleSettingsBtn" class="btn-ghost title-settings-btn">Settings</button>
     </div>
   </div>
@@ -140,6 +141,26 @@
     </div>
   </div>
 
+  <!-- Load Save Modal -->
+  <div id="loadModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box load-modal">
+      <div class="modal-header-row">
+        <h2 class="modal-title">Load Saved Game</h2>
+        <button id="closeLoadModal" class="btn-ghost small" aria-label="Close">✕</button>
+      </div>
+      <p class="modal-subtitle">Select a save file (.json) exported from a previous game.</p>
+      <div class="form-group">
+        <label for="loadFileInput">Save File</label>
+        <input type="file" id="loadFileInput" accept=".json">
+      </div>
+      <div id="loadFileInfo" class="load-file-info"></div>
+      <div class="modal-buttons">
+        <button id="confirmLoad" class="btn-primary" disabled>Load Game</button>
+        <button id="cancelLoad" class="btn-ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Main Game Layout -->
   <div id="gameLayout" style="display:none;">
 
@@ -156,7 +177,8 @@
       </div>
       <div class="top-bar-right">
         <button id="worldMapBtn" class="btn-topbar" aria-label="Open world map">🗺 World Map</button>
-        <button id="saveStoryBtn" class="btn-topbar" aria-label="Save story file">💾 Save Story</button>
+        <button id="exportSaveBtn" class="btn-topbar" aria-label="Save game file">💾 Save Game</button>
+        <button id="saveStoryBtn" class="btn-topbar" aria-label="Export story file">📜 Export Story</button>
         <span id="budgetDisplay" class="budget-display"></span>
         <button id="helpBtn" class="btn-topbar" aria-label="Help">?</button>
         <button id="settingsBtn" class="btn-topbar" aria-label="Settings">⚙</button>
