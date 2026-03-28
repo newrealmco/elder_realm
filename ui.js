@@ -102,7 +102,8 @@ export function initCharGenModal(onBegin) {
   rerollBtn.addEventListener('click', generateNewCompanions);
 
   beginBtn.addEventListener('click', () => {
-    const name = nameInput.value.trim();
+    // Sanitize player name: strip anything that looks like HTML tags
+    const name = nameInput.value.trim().replace(/<[^>]*>/g, '').slice(0, 24);
     if (name.length < 2) return;
     modal.style.display = 'none';
     onBegin({
@@ -136,8 +137,8 @@ function renderCompanionCards() {
     el.innerHTML = `
       <span class="companion-emoji">${CLASS_EMOJI[c.cls] || '⚔️'}</span>
       <div class="companion-info">
-        <div class="companion-name">${c.name} <span class="gender-symbol">${GENDER_SYMBOL[c.gender] || ''}</span></div>
-        <div class="companion-race-class">${c.race} · ${c.cls}</div>
+        <div class="companion-name">${escapeHtml(c.name)} <span class="gender-symbol">${GENDER_SYMBOL[c.gender] || ''}</span></div>
+        <div class="companion-race-class">${escapeHtml(c.race)} · ${escapeHtml(c.cls)}</div>
       </div>
     `;
     container.appendChild(el);
@@ -164,15 +165,15 @@ export function renderPartyCards(party, selectedIndex, onSelect) {
     card.setAttribute('aria-label', `${c.name} ${c.race} ${c.cls} HP ${c.hp}/${c.hpMax}`);
 
     const condBadges = c.conditions.length
-      ? `<div class="conditions-row">${c.conditions.map(cond => `<span class="condition-badge">${cond}</span>`).join('')}</div>`
+      ? `<div class="conditions-row">${c.conditions.map(cond => `<span class="condition-badge">${escapeHtml(cond)}</span>`).join('')}</div>`
       : '';
 
     card.innerHTML = `
       <div class="card-header">
         <div class="card-avatar">${c.emoji}</div>
         <div class="card-info">
-          <div class="card-name">${c.isPlayer ? '★ ' : ''}${c.name} <span class="gender-symbol">${GENDER_SYMBOL[c.gender] || ''}</span></div>
-          <div class="card-subtitle">${c.race} ${c.cls} · Lv.${c.level}</div>
+          <div class="card-name">${c.isPlayer ? '★ ' : ''}${escapeHtml(c.name)} <span class="gender-symbol">${GENDER_SYMBOL[c.gender] || ''}</span></div>
+          <div class="card-subtitle">${escapeHtml(c.race)} ${escapeHtml(c.cls)} · Lv.${c.level}</div>
         </div>
       </div>
       <div class="hp-bar-wrap">
@@ -200,9 +201,16 @@ export function renderPartyCards(party, selectedIndex, onSelect) {
 
 // ── Narrative Area ─────────────────────────────────────────────────────────
 
+const MAX_NARRATIVE_NODES = 200;
+
 export function addNarrativeMessage(type, text, options = {}) {
   const area = document.getElementById('narrativeArea');
   if (!area) return;
+
+  // Trim oldest messages to prevent unbounded DOM growth
+  while (area.children.length >= MAX_NARRATIVE_NODES) {
+    area.removeChild(area.firstChild);
+  }
 
   const el = document.createElement('div');
   el.className = `narrative-msg msg-${type}`;
@@ -236,7 +244,7 @@ export function addNarrativeMessage(type, text, options = {}) {
       <div class="msg-body">${escapeHtml(text)}</div>
     `;
   } else if (type === 'system') {
-    el.innerHTML = `<div class="msg-body">${text}</div>`;
+    el.innerHTML = `<div class="msg-body">${sanitizeSystemHtml(text)}</div>`;
   } else if (type === 'chapter') {
     el.innerHTML = `
       <div class="chapter-rule"></div>
@@ -499,8 +507,12 @@ export async function showLoadModal(onLoad) {
       });
       const file = await handle.getFile();
       const text = await file.text();
+      if (text.length > 5_000_000) {
+        alert('Save file is too large (>5 MB).');
+        return;
+      }
       const data = JSON.parse(text);
-      if (!data.gameState || !data.version) {
+      if (!data || typeof data.gameState !== 'object' || !data.version) {
         alert('Invalid save file. This doesn\'t look like an Elder Realm save.');
         return;
       }
@@ -537,8 +549,15 @@ export async function showLoadModal(onLoad) {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
+        if (e.target.result.length > 5_000_000) {
+          info.innerHTML = '<strong>Error:</strong> Save file is too large (>5 MB).';
+          info.classList.add('active');
+          confirmBtn.disabled = true;
+          parsedData = null;
+          return;
+        }
         const data = JSON.parse(e.target.result);
-        if (!data.gameState || !data.version) {
+        if (!data || typeof data.gameState !== 'object' || !data.version) {
           info.innerHTML = '<strong>Invalid save file.</strong> This doesn\'t look like an Elder Realm save.';
           info.classList.add('active');
           confirmBtn.disabled = true;
@@ -690,7 +709,20 @@ export function showXPGained(amount) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function escapeHtml(text) {
+function sanitizeSystemHtml(text) {
+  // Allow only safe inline tags: <em>, </em>, <strong>, </strong>
+  const placeholder = [];
+  const safe = (text || '').replace(/<\/?(em|strong)>/gi, (m) => {
+    placeholder.push(m);
+    return `\x00SAFE${placeholder.length - 1}\x00`;
+  });
+  let escaped = escapeHtml(safe);
+  // Restore safe tags
+  escaped = escaped.replace(/\x00SAFE(\d+)\x00/g, (_, i) => placeholder[i]);
+  return escaped;
+}
+
+export function escapeHtml(text) {
   return (text || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

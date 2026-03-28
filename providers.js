@@ -109,9 +109,10 @@ export const PROVIDERS = {
         parts: [{ text: m.content }],
       }));
       return {
-        url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
         },
         body: JSON.stringify({
           contents,

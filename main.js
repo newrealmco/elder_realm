@@ -3,7 +3,7 @@
 import { createCharacter, generateCompanion, applyHpChange, gainXP } from './characters.js';
 import { callDM, parseGameState, parseQuickActions, stripQuickActions, buildOpeningMessage, getApiKey, setApiKey } from './api.js';
 import { initStory, appendTurn, appendQuestEntry, appendPlace, appendLore, downloadStory, getStory, setStory } from './story.js';
-import { initStarfield, initRunicStrip, initCharGenModal, renderPartyCards, addNarrativeMessage, removeThinkingMessage, initTabs, switchTab, openMapModal, showApiKeyModal, isApiKeyModalRequired, openHelpModal, closeHelpModal, showLoadModal, closeLoadModal, setInputEnabled, clearInput, getInputValue, updateLocationDisplay, updateWorldName, renderMiniMap, showLevelUp, showXPGained } from './ui.js';
+import { initStarfield, initRunicStrip, initCharGenModal, renderPartyCards, addNarrativeMessage, removeThinkingMessage, initTabs, switchTab, openMapModal, showApiKeyModal, isApiKeyModalRequired, openHelpModal, closeHelpModal, showLoadModal, closeLoadModal, setInputEnabled, clearInput, getInputValue, updateLocationDisplay, updateWorldName, renderMiniMap, showLevelUp, showXPGained, escapeHtml } from './ui.js';
 import { initDicePanel, rollAndAnimate, getPendingRolls } from './dice.js';
 import { generateWorldMap, generateLocationMap } from './maps.js';
 import { getCombatState, processCombatGameState, renderCombatOverlay, deactivateCombat } from './combat.js';
@@ -132,13 +132,28 @@ async function exportSave() {
 }
 
 function importSave(data) {
+  // Validate structure
+  if (!data || typeof data !== 'object' || typeof data.gameState !== 'object') {
+    alert('Invalid save file: missing game state.');
+    return;
+  }
+  if (!Array.isArray(data.gameState.party) || data.gameState.party.length === 0) {
+    alert('Invalid save file: missing party data.');
+    return;
+  }
+  // Size guard: reject saves larger than 5MB to prevent storage abuse
+  const raw = JSON.stringify(data);
+  if (raw.length > 5_000_000) {
+    alert('Save file is too large (>5 MB).');
+    return;
+  }
   // Write all data into localStorage
   localStorage.setItem('chronicles_game_state', JSON.stringify(data.gameState));
-  localStorage.setItem('chronicles_conversation', JSON.stringify(data.conversation || []));
-  localStorage.setItem('chronicles_inventory', JSON.stringify(data.inventory || []));
-  localStorage.setItem('chronicles_quest_entries', JSON.stringify(data.questEntries || []));
-  localStorage.setItem('chronicles_lore_entries', JSON.stringify(data.loreEntries || []));
-  if (data.storyMd) setStory(data.storyMd);
+  localStorage.setItem('chronicles_conversation', JSON.stringify(Array.isArray(data.conversation) ? data.conversation : []));
+  localStorage.setItem('chronicles_inventory', JSON.stringify(Array.isArray(data.inventory) ? data.inventory : []));
+  localStorage.setItem('chronicles_quest_entries', JSON.stringify(Array.isArray(data.questEntries) ? data.questEntries : []));
+  localStorage.setItem('chronicles_lore_entries', JSON.stringify(Array.isArray(data.loreEntries) ? data.loreEntries : []));
+  if (typeof data.storyMd === 'string') setStory(data.storyMd);
   // Now resume from the imported state
   resumeGame();
 }
@@ -239,9 +254,9 @@ async function processGameState(gs) {
       if (char) {
         applyHpChange(char, delta);
         if (delta < 0) {
-          addNarrativeMessage('system', `<em>${char.name} takes ${Math.abs(delta)} damage. (${char.hp}/${char.hpMax} HP)</em>`);
+          addNarrativeMessage('system', `<em>${escapeHtml(char.name)} takes ${Math.abs(delta)} damage. (${char.hp}/${char.hpMax} HP)</em>`);
         } else if (delta > 0) {
-          addNarrativeMessage('system', `<em>${char.name} heals ${delta} HP. (${char.hp}/${char.hpMax} HP)</em>`);
+          addNarrativeMessage('system', `<em>${escapeHtml(char.name)} heals ${delta} HP. (${char.hp}/${char.hpMax} HP)</em>`);
         }
       }
     }
@@ -250,7 +265,7 @@ async function processGameState(gs) {
   // New items
   if (gs.newItems && gs.newItems.length > 0) {
     addItems(gs.newItems);
-    addNarrativeMessage('system', `🎒 Added to inventory: ${gs.newItems.join(', ')}`);
+    addNarrativeMessage('system', `🎒 Added to inventory: ${gs.newItems.map(n => escapeHtml(n)).join(', ')}`);
   }
 
   // Removed items
@@ -419,9 +434,12 @@ async function startOpeningScene() {
 
 // ── Boot Sequence ──────────────────────────────────────────────────────────
 
+let stopStarfield = null;
+let gameListenersWired = false;
+
 async function boot() {
   // Title screen animations
-  initStarfield();
+  stopStarfield = initStarfield();
   initRunicStrip();
 
   // Check for saved game — show resume button alongside begin
@@ -487,10 +505,78 @@ async function onCharGenComplete({ name, race, cls, gender, companions }) {
   requireApiKey(() => launchGame());
 }
 
+function wireGameListeners() {
+  // Init dice panel (always re-inits since it clears innerHTML)
+  initDicePanel(
+    document.getElementById('diceButtons'),
+    document.getElementById('diceHistory'),
+    ({ die, result, isCrit, isFumble }) => {
+      if (isCrit)   addNarrativeMessage('system', `⚡ <strong>Critical!</strong> ${result} on the ${die.toUpperCase()}. Fortune smiles upon you!`);
+      if (isFumble) addNarrativeMessage('system', `💀 A 1. The gods are cruel today.`);
+    }
+  );
+
+  initTabs();
+
+  // Only wire event listeners once to prevent duplication on resume
+  if (gameListenersWired) return;
+  gameListenersWired = true;
+
+  const input   = document.getElementById('playerInput');
+  const sendBtn = document.getElementById('sendBtn');
+
+  input?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const val = getInputValue();
+      if (val) sendAction(val);
+    }
+  });
+
+  input?.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 80) + 'px';
+  });
+
+  sendBtn?.addEventListener('click', () => {
+    const val = getInputValue();
+    if (val) sendAction(val);
+  });
+
+  document.getElementById('worldMapBtn')?.addEventListener('click', () => {
+    openMapModal(gameState.worldMapSvg, gameState.locationMapSvg, 'world');
+  });
+  document.getElementById('expandMapBtn')?.addEventListener('click', () => {
+    openMapModal(gameState.worldMapSvg, gameState.locationMapSvg, 'location');
+  });
+  document.getElementById('exportSaveBtn')?.addEventListener('click', exportSave);
+  document.getElementById('saveStoryBtn')?.addEventListener('click', () => {
+    downloadStory(gameState.worldName);
+  });
+  document.getElementById('helpBtn')?.addEventListener('click', openHelpModal);
+  document.getElementById('closeHelp')?.addEventListener('click', closeHelpModal);
+  document.getElementById('settingsBtn')?.addEventListener('click', () => {
+    showApiKeyModal((key) => setApiKey(key));
+  });
+  document.getElementById('mainMenuBtn')?.addEventListener('click', returnToTitle);
+
+  document.getElementById('mapModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('mapModal')) {
+      document.getElementById('mapModal').style.display = 'none';
+    }
+  });
+  document.getElementById('helpModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('helpModal')) closeHelpModal();
+  });
+}
+
 async function launchGame() {
   if (!getApiKey()) return; // Safety net — should never reach here without a key
   // Init story file
   initStory(gameState.worldName, gameState.party, gameState.worldSeed);
+
+  // Stop title screen animation to free resources
+  if (stopStarfield) { stopStarfield(); stopStarfield = null; }
 
   // Show game layout
   document.getElementById('titleScreen').style.display = 'none';
@@ -509,68 +595,7 @@ async function launchGame() {
   gameState.locationMapSvg = generateLocationMap(gameState.currentLocation);
   renderMiniMap(gameState.locationMapSvg, gameState.currentLocation);
 
-  // Init dice panel
-  initDicePanel(
-    document.getElementById('diceButtons'),
-    document.getElementById('diceHistory'),
-    ({ die, result, isCrit, isFumble }) => {
-      if (isCrit)   addNarrativeMessage('system', `⚡ <strong>Critical!</strong> ${result} on the ${die.toUpperCase()}. Fortune smiles upon you!`);
-      if (isFumble) addNarrativeMessage('system', `💀 A 1. The gods are cruel today.`);
-    }
-  );
-
-  // Init tabs
-  initTabs();
-
-  // Wire input
-  const input   = document.getElementById('playerInput');
-  const sendBtn = document.getElementById('sendBtn');
-
-  input?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      const val = getInputValue();
-      if (val) sendAction(val);
-    }
-  });
-
-  input?.addEventListener('input', () => {
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 80) + 'px';
-  });
-
-  sendBtn?.addEventListener('click', () => {
-    const val = getInputValue();
-    if (val) sendAction(val);
-  });
-
-  // Top bar buttons
-  document.getElementById('worldMapBtn')?.addEventListener('click', () => {
-    openMapModal(gameState.worldMapSvg, gameState.locationMapSvg, 'world');
-  });
-  document.getElementById('expandMapBtn')?.addEventListener('click', () => {
-    openMapModal(gameState.worldMapSvg, gameState.locationMapSvg, 'location');
-  });
-  document.getElementById('exportSaveBtn')?.addEventListener('click', exportSave);
-  document.getElementById('saveStoryBtn')?.addEventListener('click', () => {
-    downloadStory(gameState.worldName);
-  });
-  document.getElementById('helpBtn')?.addEventListener('click', openHelpModal);
-  document.getElementById('closeHelp')?.addEventListener('click', closeHelpModal);
-  document.getElementById('settingsBtn')?.addEventListener('click', () => {
-    showApiKeyModal((key) => setApiKey(key));
-  });
-  document.getElementById('mainMenuBtn')?.addEventListener('click', returnToTitle);
-
-  // Map modal close on backdrop click
-  document.getElementById('mapModal')?.addEventListener('click', (e) => {
-    if (e.target === document.getElementById('mapModal')) {
-      document.getElementById('mapModal').style.display = 'none';
-    }
-  });
-  document.getElementById('helpModal')?.addEventListener('click', (e) => {
-    if (e.target === document.getElementById('helpModal')) closeHelpModal();
-  });
+  wireGameListeners();
 
   // Render initial party
   renderAll();
@@ -579,7 +604,7 @@ async function launchGame() {
   renderBudgetDisplay(document.getElementById('budgetDisplay'));
 
   // Welcome message
-  addNarrativeMessage('system', `<em>Welcome to ${gameState.worldName}. Your legend begins...</em>`);
+  addNarrativeMessage('system', `<em>Welcome to ${escapeHtml(gameState.worldName)}. Your legend begins...</em>`);
 
   // Start opening scene
   await startOpeningScene();
@@ -593,6 +618,8 @@ async function resumeGame() {
 
 function resumeGameLayout() {
   if (!getApiKey()) return; // Safety net
+  // Stop title screen animation to free resources
+  if (stopStarfield) { stopStarfield(); stopStarfield = null; }
   document.getElementById('titleScreen').style.display = 'none';
   document.getElementById('gameLayout').style.display  = 'flex';
 
@@ -608,63 +635,7 @@ function resumeGameLayout() {
   }
   renderMiniMap(gameState.locationMapSvg, gameState.currentLocation);
 
-  // Init dice panel
-  initDicePanel(
-    document.getElementById('diceButtons'),
-    document.getElementById('diceHistory'),
-    ({ die, result, isCrit, isFumble }) => {
-      if (isCrit)   addNarrativeMessage('system', `⚡ <strong>Critical!</strong> ${result} on the ${die.toUpperCase()}. Fortune smiles upon you!`);
-      if (isFumble) addNarrativeMessage('system', `💀 A 1. The gods are cruel today.`);
-    }
-  );
-
-  initTabs();
-
-  const input   = document.getElementById('playerInput');
-  const sendBtn = document.getElementById('sendBtn');
-
-  input?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      const val = getInputValue();
-      if (val) sendAction(val);
-    }
-  });
-
-  input?.addEventListener('input', () => {
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 80) + 'px';
-  });
-
-  sendBtn?.addEventListener('click', () => {
-    const val = getInputValue();
-    if (val) sendAction(val);
-  });
-
-  document.getElementById('worldMapBtn')?.addEventListener('click', () => {
-    openMapModal(gameState.worldMapSvg, gameState.locationMapSvg, 'world');
-  });
-  document.getElementById('expandMapBtn')?.addEventListener('click', () => {
-    openMapModal(gameState.worldMapSvg, gameState.locationMapSvg, 'location');
-  });
-  document.getElementById('exportSaveBtn')?.addEventListener('click', exportSave);
-  document.getElementById('saveStoryBtn')?.addEventListener('click', () => {
-    downloadStory(gameState.worldName);
-  });
-  document.getElementById('helpBtn')?.addEventListener('click', openHelpModal);
-  document.getElementById('closeHelp')?.addEventListener('click', closeHelpModal);
-  document.getElementById('settingsBtn')?.addEventListener('click', () => {
-    showApiKeyModal((key) => setApiKey(key));
-  });
-  document.getElementById('mainMenuBtn')?.addEventListener('click', returnToTitle);
-  document.getElementById('mapModal')?.addEventListener('click', (e) => {
-    if (e.target === document.getElementById('mapModal')) {
-      document.getElementById('mapModal').style.display = 'none';
-    }
-  });
-  document.getElementById('helpModal')?.addEventListener('click', (e) => {
-    if (e.target === document.getElementById('helpModal')) closeHelpModal();
-  });
+  wireGameListeners();
 
   renderAll();
 
@@ -681,11 +652,11 @@ function resumeGameLayout() {
     }
   }
 
-  addNarrativeMessage('system', `<em>Resuming your journey in ${gameState.worldName}...</em>`);
-  addNarrativeMessage('system', `<em>You find yourself at ${gameState.currentLocation}. What do you do?</em>`);
+  addNarrativeMessage('system', `<em>Resuming your journey in ${escapeHtml(gameState.worldName)}...</em>`);
+  addNarrativeMessage('system', `<em>You find yourself at ${escapeHtml(gameState.currentLocation)}. What do you do?</em>`);
 
   setInputEnabled(true);
-  input?.focus();
+  document.getElementById('playerInput')?.focus();
 }
 
 function handleGlobalKey(e) {

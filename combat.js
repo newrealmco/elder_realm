@@ -1,5 +1,7 @@
 // combat.js — Combat tracker, enemy HP, initiative
 
+import { escapeHtml } from './ui.js';
+
 let combatState = {
   active: false,
   round: 1,
@@ -73,7 +75,7 @@ export function renderCombatOverlay(overlay, enemyList, roundDisplay) {
     card.className = `enemy-card${defeated ? ' defeated' : ''}`;
 
     card.innerHTML = `
-      <div class="enemy-name">${enemy.name}${defeated ? ' — Defeated' : ''}</div>
+      <div class="enemy-name">${escapeHtml(enemy.name)}${defeated ? ' — Defeated' : ''}</div>
       <div class="enemy-hp-wrap">
         <div class="enemy-hp-bg">
           <div class="enemy-hp-fill" style="width:${(pct*100).toFixed(1)}%"></div>

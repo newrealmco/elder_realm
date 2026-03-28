@@ -1,5 +1,7 @@
 // inventory.js — Loot system and item management
 
+import { escapeHtml } from './ui.js';
+
 const ICON_MAP = {
   sword: '⚔️', blade: '⚔️', dagger: '🗡️', knife: '🗡️', bow: '🏹',
   staff: '🪄', wand: '🪄', axe: '🪓', mace: '🔨', spear: '🗡️',
@@ -79,8 +81,8 @@ export function renderInventory(container) {
     el.innerHTML = `
       <span class="item-icon">${item.icon}</span>
       <div class="item-info">
-        <div class="item-name">${item.name}</div>
-        <div class="item-type">${item.type}</div>
+        <div class="item-name">${escapeHtml(item.name)}</div>
+        <div class="item-type">${escapeHtml(item.type)}</div>
       </div>
       <span class="item-qty">×${item.qty || 1}</span>
     `;

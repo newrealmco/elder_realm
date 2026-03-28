@@ -90,6 +90,20 @@ All game state is in `localStorage` under `chronicles_*` keys:
 - Max tokens: 700 (defined in `providers.js`)
 - Anthropic uses `anthropic-dangerous-direct-browser-access` header for browser-side API calls
 
+### Security
+
+- **XSS prevention:** All AI-generated content (DM responses, GAMESTATE values, enemy names, item names, quest text) is escaped via `escapeHtml()` before DOM insertion. System messages allow only `<em>` and `<strong>` tags via `sanitizeSystemHtml()`. Player names are stripped of HTML tags on input.
+- **CSP:** `index.html` includes a Content-Security-Policy meta tag restricting script-src to 'self', connect-src to AI API endpoints only, and frame-ancestors to 'self'.
+- **API keys:** Stored per-provider in localStorage. Gemini key sent via `x-goog-api-key` header (not URL query param). Keys are never logged or sent to any server other than the provider's API.
+- **Save file validation:** Import validates structure (required fields, types, arrays), enforces 5 MB size limit.
+
+### Memory Management
+
+- **Narrative DOM cap:** Max 200 message nodes; oldest removed when limit reached.
+- **Starfield animation:** `requestAnimationFrame` loop is stopped when entering the game via the returned stop function.
+- **Event listeners:** `wireGameListeners()` guards against duplicate registration across resume cycles.
+- **Entry limits:** Quest entries capped at 50, lore entries capped at 50.
+
 ## Style / CSS
 
 `style.css` is the single CSS file with all styling. Uses CSS custom properties for theming (dark parchment fantasy aesthetic). Fonts: Cinzel (headings), Crimson Pro (body) via Google Fonts.

@@ -1,14 +1,17 @@
 // journal.js — Quest log and lore notes
 
+import { escapeHtml } from './ui.js';
+
 let questEntries = [];
 let loreEntries  = [];
 
 const MAX_QUEST_ENTRIES = 50;
+const MAX_LORE_ENTRIES  = 50;
 
 export function getQuestEntries() { return questEntries; }
 export function getLoreEntries()  { return loreEntries;  }
-export function setQuestEntries(entries) { questEntries = entries; }
-export function setLoreEntries(entries)  { loreEntries  = entries; }
+export function setQuestEntries(entries) { questEntries = entries.slice(0, MAX_QUEST_ENTRIES); }
+export function setLoreEntries(entries)  { loreEntries  = entries.slice(0, MAX_LORE_ENTRIES); }
 
 export function addQuestEntry({ turn, location, text }) {
   const entry = {
@@ -27,6 +30,9 @@ export function addQuestEntry({ turn, location, text }) {
 
 export function addLoreEntry(text) {
   loreEntries.push({ id: loreEntries.length + 1, text });
+  if (loreEntries.length > MAX_LORE_ENTRIES) {
+    loreEntries = loreEntries.slice(-MAX_LORE_ENTRIES);
+  }
 }
 
 function detectQuestType(text) {
@@ -46,8 +52,8 @@ export function renderQuestLog(container) {
     const el = document.createElement('div');
     el.className = 'quest-entry';
     el.innerHTML = `
-      <div class="quest-title">${entry.title}</div>
-      <div class="quest-text">${entry.text}</div>
+      <div class="quest-title">${escapeHtml(entry.title)}</div>
+      <div class="quest-text">${escapeHtml(entry.text)}</div>
     `;
     container.appendChild(el);
   }
