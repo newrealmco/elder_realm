@@ -1,0 +1,17 @@
+# Claude Code local settings
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Node (in case someone runs npx serve)
+node_modules/
+package-lock.json

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='24' font-size='24'>⚔</text></svg>">
+  <title>Chronicles of the Elder Realm</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- API Key Modal -->
+  <div id="apiKeyModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box api-key-modal">
+      <h2 class="modal-title">⚔ Ancient Magic Required</h2>
+      <p class="modal-subtitle">Choose your AI provider and enter a key to summon the Dungeon Master.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="providerSelect">AI Provider</label>
+          <select id="providerSelect"></select>
+        </div>
+        <div class="form-group">
+          <label for="modelSelect">Model</label>
+          <select id="modelSelect"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="apiKeyInput" id="apiKeyLabel">API Key</label>
+        <input type="password" id="apiKeyInput" placeholder="sk-ant-..." autocomplete="off">
+      </div>
+      <p class="modal-hint">Your key is stored locally and never sent anywhere except your provider's servers.<br>
+        Get a key at <em id="apiKeyHintUrl">console.anthropic.com</em></p>
+      <div class="form-group">
+        <label for="budgetInput">Session Budget ($)</label>
+        <input type="number" id="budgetInput" placeholder="e.g. 5.00" min="0" step="0.50" autocomplete="off">
+      </div>
+      <div class="modal-buttons">
+        <button id="saveApiKey" class="btn-primary">Bind the Magic</button>
+        <button id="closeSettings" class="btn-ghost">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Title Screen -->
+  <div id="titleScreen">
+    <canvas id="starfield"></canvas>
+    <div class="runic-strip notranslate" id="runicStrip" translate="no"></div>
+    <div class="title-content">
+      <div class="title-rune-border"></div>
+      <div class="title-rule"></div>
+      <h1 class="game-title">Chronicles of the Elder Realm</h1>
+      <div class="title-rule"></div>
+      <p class="game-subtitle"><em>A Solo Adventure · Powered by Ancient Magic</em></p>
+      <div class="title-rule thin"></div>
+      <p class="title-flavor">
+        In an age before memory, when the world was young and dark things stirred beneath ancient mountains,
+        a prophecy was written in fire across the night sky. Four souls, bound by fate and forged in shadow,
+        shall walk the Elder Realm — and their deeds shall echo until the stars burn cold.
+      </p>
+      <button id="beginBtn" class="btn-begin">Begin Your Legend</button>
+      <button id="resumeGame" class="btn-secondary title-resume-btn" style="display:none;">Resume Saved Journey</button>
+      <button id="titleSettingsBtn" class="btn-ghost title-settings-btn">Settings</button>
+    </div>
+  </div>
+
+  <!-- Character Generation Modal -->
+  <div id="charGenModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box chargen-modal">
+      <h2 class="modal-title">⚔ Forge Your Legend</h2>
+      <p class="modal-subtitle">Choose your hero. Fate will assign your companions.</p>
+
+      <div class="chargen-grid">
+        <!-- Player Character -->
+        <div class="chargen-section player-section">
+          <h3 class="section-label">Your Hero</h3>
+          <div class="form-group">
+            <label for="playerName">Name</label>
+            <input type="text" id="playerName" placeholder="Enter your name..." maxlength="24" autocomplete="off">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="playerRace">Race</label>
+              <select id="playerRace"></select>
+            </div>
+            <div class="form-group">
+              <label for="playerClass">Class</label>
+              <select id="playerClass"></select>
+            </div>
+            <div class="form-group form-group-narrow">
+              <label for="playerGender">Gender</label>
+              <select id="playerGender"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Companions -->
+        <div class="chargen-section companions-section">
+          <div class="companions-header">
+            <h3 class="section-label">Your Companions</h3>
+            <button id="rerollBtn" class="btn-ghost small">⟳ Re-roll Fate</button>
+          </div>
+          <div id="companionCards" class="companion-cards"></div>
+        </div>
+      </div>
+
+      <div class="chargen-footer">
+        <button id="beginAdventure" class="btn-primary" disabled>Begin the Adventure →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map Modal -->
+  <div id="mapModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box map-modal">
+      <div class="map-modal-header">
+        <div class="map-tab-btns">
+          <button id="worldMapTab" class="map-tab active">World Map</button>
+          <button id="locationMapTab" class="map-tab">Location Map</button>
+        </div>
+        <button id="closeMapModal" class="btn-ghost small" aria-label="Close map">✕</button>
+      </div>
+      <div id="mapModalContent" class="map-modal-content"></div>
+      <div id="mapLegend" class="map-legend"></div>
+    </div>
+  </div>
+
+  <!-- Help Modal -->
+  <div id="helpModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box help-modal">
+      <div class="modal-header-row">
+        <h2 class="modal-title">User Manual</h2>
+        <button id="closeHelp" class="btn-ghost small" aria-label="Close help">✕</button>
+      </div>
+      <div id="helpContent" class="help-content"></div>
+    </div>
+  </div>
+
+  <!-- Main Game Layout -->
+  <div id="gameLayout" style="display:none;">
+
+    <!-- Top Bar -->
+    <header id="topBar" class="top-bar" role="banner">
+      <div class="top-bar-left">
+        <span id="worldNameDisplay" class="world-name">The Elder Realm</span>
+        <span class="top-bar-sep">·</span>
+        <span id="locationDisplay" class="location-name">Unknown Lands</span>
+        <span id="weatherDisplay" class="weather-display"></span>
+      </div>
+      <div class="top-bar-center">
+        <span class="game-title-bar">⚔ CHRONICLES OF THE ELDER REALM ⚔</span>
+      </div>
+      <div class="top-bar-right">
+        <button id="worldMapBtn" class="btn-topbar" aria-label="Open world map">🗺 World Map</button>
+        <button id="saveStoryBtn" class="btn-topbar" aria-label="Save story file">💾 Save Story</button>
+        <span id="budgetDisplay" class="budget-display"></span>
+        <button id="helpBtn" class="btn-topbar" aria-label="Help">?</button>
+        <button id="settingsBtn" class="btn-topbar" aria-label="Settings">⚙</button>
+        <button id="mainMenuBtn" class="btn-topbar" aria-label="Main menu">Main Menu</button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="mainContent" class="main-content">
+
+      <!-- Left Panel: Party + Dice -->
+      <aside id="leftPanel" class="left-panel" role="complementary" aria-label="Party panel">
+        <div class="panel-header">
+          <span class="panel-title">THE PARTY</span>
+        </div>
+        <div id="partyCards" class="party-cards"></div>
+
+      </aside>
+
+      <!-- Center Panel: Narrative + Map -->
+      <section id="centerPanel" class="center-panel">
+        <!-- Combat Overlay -->
+        <div id="combatOverlay" class="combat-overlay" style="display:none;" role="region" aria-label="Combat tracker">
+          <div class="combat-header">
+            <span class="combat-title">⚔ COMBAT</span>
+            <span id="combatRoundDisplay" class="combat-round">Round 1</span>
+          </div>
+          <div id="enemyList" class="enemy-list"></div>
+        </div>
+
+        <!-- Narrative Area -->
+        <div id="narrativeArea" class="narrative-area" role="log" aria-live="polite" aria-label="Story narrative"></div>
+
+        <!-- Location Map Mini -->
+        <div id="locationMapMini" class="location-map-mini">
+          <div class="mini-map-header">
+            <span class="mini-map-title" id="miniMapTitle">Current Location</span>
+            <button id="expandMapBtn" class="btn-ghost tiny" aria-label="Expand map">⤢</button>
+          </div>
+          <div id="miniMapSvg" class="mini-map-svg"></div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Journal/Loot/Lore -->
+      <aside id="rightPanel" class="right-panel" role="complementary" aria-label="Journal panel">
+        <div class="right-panel-tabs">
+          <button id="tabJournal" class="right-tab active" data-tab="journal">Journal</button>
+          <button id="tabLoot" class="right-tab" data-tab="loot">Loot</button>
+          <button id="tabLore" class="right-tab" data-tab="lore">Lore</button>
+        </div>
+        <div id="journalTab" class="tab-content active">
+          <div id="questLog" class="quest-log"></div>
+        </div>
+        <div id="lootTab" class="tab-content" style="display:none;">
+          <div id="inventoryList" class="inventory-list"></div>
+        </div>
+        <div id="loreTab" class="tab-content" style="display:none;">
+          <div class="lore-header">Chronicles of the Elder Realm — Lore &amp; History</div>
+          <div id="loreList" class="lore-list"></div>
+        </div>
+      </aside>
+
+    </main>
+
+    <!-- Bottom Bar -->
+    <footer id="bottomBar" class="bottom-bar" role="contentinfo">
+      <div id="dicePanel" class="dice-row">
+        <div id="diceButtons" class="dice-buttons-row"></div>
+        <div id="diceResult" class="dice-result-inline"></div>
+        <div id="diceHistory" class="dice-history-inline"></div>
+      </div>
+      <div class="input-area">
+        <textarea
+          id="playerInput"
+          class="player-input"
+          placeholder="What do you do?"
+          rows="1"
+          aria-label="Player action input"
+          maxlength="500"
+        ></textarea>
+        <button id="sendBtn" class="btn-send" aria-label="Send action">Send ↵</button>
+      </div>
+    </footer>
+
+  </div><!-- /gameLayout -->
+
+  <!-- Scripts (ES Modules) -->
+  <script type="module" src="main.js"></script>
+</body>
+</html>
